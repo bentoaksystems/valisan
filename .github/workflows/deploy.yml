@@ -1,0 +1,38 @@
+# Builds the static export and publishes it to Cloudflare Pages (free tier).
+# Netlify deploys are configured by netlify.toml in the project instead (connect the repo in the Netlify UI).
+name: Deploy Valisan demo
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: package-lock.json }
+      - run: npm ci
+      - run: npm run typecheck && npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with: { name: out, path: out }
+
+  cloudflare:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ vars.CLOUDFLARE_PROJECT != '' }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: out, path: out }
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy out --project-name=${{ vars.CLOUDFLARE_PROJECT }}
